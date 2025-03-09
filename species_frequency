@@ -1,0 +1,29 @@
+ # loading packages
+library(tidyverse)
+library(knitr)
+library(lubridate)
+library(httpuv)
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(broom)
+library(readr)
+library(dplyr)
+library(glue)
+library(yardstick)
+library(ggplot2)
+library(chron)
+library(tibble)
+install.packages("corrplot")
+library(corrplot)
+library(mgcv)
+
+# loading data
+bird_data_feb <- read.csv('Haikubox_Feb 2025.csv')
+
+# initial exploring of data
+glimpse(bird_data_feb)
+summary(bird_data_feb)
+
+# Checking for missing values
+colSums(is.na(bird_data_feb))
