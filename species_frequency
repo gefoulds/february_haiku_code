@@ -2,15 +2,11 @@
 library(tidyverse)
 library(knitr)
 library(lubridate)
-library(httpuv)
-library(data.table)
 library(dplyr)
 library(ggplot2)
 library(broom)
 library(readr)
-library(dplyr)
 library(glue)
-library(yardstick)
 library(ggplot2)
 library(chron)
 library(tibble)
@@ -27,3 +23,181 @@ summary(bird_data_feb)
 
 # Checking for missing values
 colSums(is.na(bird_data_feb))
+
+# Ensure Local.Date is a date format
+bird_data_feb$Local.Date <- as.Date(bird_data_feb$Local.Date, format="%d-%b-%y")
+
+# Ensure Local.Time is stored properly as a time-only format
+library(chron)
+bird_data_feb$Local.Time <- chron(times = bird_data_feb$Local.Time)
+
+# Ensure Score is numeric
+bird_data_feb$Score <- as.numeric(bird_data_feb$Score)
+
+# Store max and min values separately
+max_date <- max(bird_data_feb$Local.Date, na.rm = TRUE)
+min_date <- min(bird_data_feb$Local.Date, na.rm = TRUE)
+
+max_time <- format(max(bird_data_feb$Local.Time, na.rm = TRUE)) 
+min_time <- format(min(bird_data_feb$Local.Time, na.rm = TRUE))
+
+max_score <- max(bird_data_feb$Score, na.rm = TRUE)
+min_score <- min(bird_data_feb$Score, na.rm = TRUE)
+
+max_count <- max(bird_data_feb$Count, na.rm = TRUE)
+min_count <- min(bird_data_feb$Count, na.rm = TRUE)
+
+# Print results in an easy-to-read format
+cat("Max and Min Values:\n")
+cat("Max Date: ", format(max_date, "%Y-%m-%d"), "\n")
+cat("Min Date: ", format(min_date, "%Y-%m-%d"), "\n")
+cat("Max Time: ", max_time, "\n")
+cat("Min Time: ", min_time, "\n")
+cat("Max Score:", max_score, "\n")
+cat("Min Score:", min_score, "\n")
+cat("Count", max_count, "\n")
+cat("Count", min_count, "\n")
+
+# Identify Outliers
+
+#Finding the outlier rows
+
+# Calculate Q1 (25th percentile) and Q3 (75th percentile)
+Q1 <- quantile(bird_data_feb$Local.Time, 0.25, na.rm = TRUE)
+Q3 <- quantile(bird_data_feb$Local.Time, 0.75, na.rm = TRUE)
+
+# Compute IQR
+IQR_value <- Q3 - Q1
+
+# Define lower and upper bounds for outliers
+lower_bound <- Q1 - 1.5 * IQR_value
+upper_bound <- Q3 + 1.5 * IQR_value
+
+# Find rows where Local.Time is an outlier
+outlier_rows <- bird_data_feb[bird_data_feb$Local.Time < lower_bound | bird_data_feb$Local.Time > upper_bound, ]
+
+# Display rows with outliers
+print(outlier_rows)
+
+# Boxplot of Local.Time to visualize outliers
+boxplot(bird_data_feb$Local.Time, 
+        main = "Boxplot of Local Time",
+        col = "lightblue",
+        horizontal = TRUE)
+
+# Remove outlier rows from the dataset
+bird_data_cleaned <- bird_data_feb[!(bird_data_feb$Local.Time < lower_bound | bird_data_feb$Local.Time > upper_bound), ]
+
+# Display the cleaned dataset
+glimpse(bird_data_cleaned)
+
+# Removing UTC.Date
+bird_data <- subset(bird_data_cleaned, select = -UTC.Date)
+
+# data check
+glimpse(bird_data)
+
+# How many species were recorded
+length(unique(bird_data$Species))
+
+# Create a subset where Score > 0.9
+bird_data_high_confidence <- subset(bird_data, Score > 0.9)
+
+# Display the first few rows to verify
+glimpse(bird_data_high_confidence)
+
+# Graph to show total recorded observations per species
+ggplot(bird_data_high_confidence, aes(x = reorder(Species, -Count), y = Count, fill = Species)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Total Recorded Observations per Species",
+       x = "Species",
+       y = "Total Count") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+# Subsetting the top 5 species for focused analysis
+top_5_species <- bird_data_high_confidence %>%
+  group_by(Species) %>%
+  summarize(Total_Count = sum(Count)) %>%
+  arrange(desc(Total_Count)) %>%
+  slice_head(n = 5) 
+
+bird_data_top_5 <- bird_data_high_confidence %>%
+  filter(Species %in% top_5_species$Species)
+
+glimpse(bird_data_top_5)
+
+print(top_5_species)
+
+ggplot(bird_data_top_5, aes(x = reorder(Species, -Count), y = Count, fill = Species)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Total Observations of the 5 Most Frequently Recorded Species",
+       x = "Species",
+       y = "Total Count") +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 13))
+
+# Exploring time and number of observations
+
+# Convert and group by 1-minute intervals
+bird_data_top_5_interval <- bird_data_top_5 %>% 
+  mutate(
+    Local.Time.POSIX = as.POSIXct(sprintf("2025-03-05 %s", Local.Time), format="%Y-%m-%d %H:%M:%S", tz="UTC"),  # Convert chron time to POSIXct
+    interval_1min = format(floor_date(Local.Time.POSIX, "minute"), "%H:%M")  # Round down to nearest 1 min
+  )
+
+# Summarize the total count per species per 1-minute interval
+bird_data_top_5_interval_totalcount <- bird_data_top_5_interval %>%
+  group_by(interval_1min, Species) %>%
+  summarise(total_count = sum(Count, na.rm = TRUE), .groups = "drop") %>%
+  arrange(interval_1min, Species)
+
+head(bird_data_top_5_interval_totalcount)
+
+# Convert time to decimal hours
+bird_data_top_5_interval_totalcount <- bird_data_top_5_interval_totalcount %>%
+  mutate(Hour = as.numeric(substr(interval_1min, 1, 2)) + 
+                as.numeric(substr(interval_1min, 4, 5)) / 60)
+
+ggplot(bird_data_top_5_interval_totalcount, aes(x = Hour)) +
+  geom_density(fill="blue", alpha = 0.6) +
+  labs(title = "Density of Species Observations",
+       x = "Time of Day (Hours)",
+       y = "Density") +
+  scale_x_continuous(limits = c(4, 20), breaks = seq(4, 20, by = 1)) +  # Extend full range
+  theme_minimal()
+
+# Convert time to decimal hours
+bird_data_top_5_interval_totalcount <- bird_data_top_5_interval_totalcount %>%
+  mutate(Hour = as.numeric(substr(interval_1min, 1, 2)) + 
+                as.numeric(substr(interval_1min, 4, 5)) / 60)
+
+# Smooth density plot of species observations over time
+ggplot(bird_data_top_5_interval_totalcount, aes(x = Hour, color=Species, fill=Species)) +
+  geom_density(alpha = 0.3) +
+  labs(title = "Density of Observations by Species",
+       x = "Time of Day (Hours)",
+       y = "Density") +
+ scale_x_continuous(limits = c(4, 20), breaks = seq(4, 20, by = 1)) +
+  theme_minimal()
+
+ggplot(bird_data_top_5_interval_totalcount, aes(x = Hour, fill = Species)) +
+  geom_density(alpha = 0.3, color = "black") + 
+  labs(title = "Density of Observations by Species",
+       x = "Time of Day (Hours)",
+       y = "Density") +
+  scale_x_continuous(limits = c(4, 20), breaks = seq(4, 20, by = 2), labels = seq(4, 20, by = 2)) +  # Clearer labels
+  facet_wrap(~ Species, scales = "free_y") +  
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_line(color = "grey85", size = 0.4),  # Subtle grid lines
+    panel.grid.minor = element_blank(),  # Remove minor grid lines for clarity
+    strip.text = element_text(size = 14, face = "bold"),  # Larger facet titles
+    axis.text.x = element_text(size = 12, angle = 0, vjust = 0.5),  # Clearer x-axis labels
+    axis.text.y = element_text(size = 12),  
+    axis.title = element_text(size = 14, face = "bold"),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),  # Centered bold title
+    legend.position = "none"  # Remove redundant legend since facets are labeled
+  )
+
