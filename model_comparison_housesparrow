@@ -1,4 +1,80 @@
+# Load necessary libraries
 library(ggplot2)
 library(mgcv)
 library(dplyr)
+
+#
+load data 
+
+# Ensure Hour is numeric
+house_sparrow_data_interval$Hour <- as.numeric(house_sparrow_data_interval$Hour)
+
+# Fit a GAM model with a smooth function of Hour
+gam_model <- gam(total_count ~ s(Hour, bs = "cs"), family = poisson, data = house_sparrow_data_interval)
+
+# Summary of the GAM model
+summary(gam_model)
+
+# Create prediction data
+prediction_data <- data.frame(Hour = seq(min(house_sparrow_data_interval$Hour), 
+                                         max(house_sparrow_data_interval$Hour), 
+                                         length.out = 100))
+prediction_data$Predicted_Count <- predict(gam_model, newdata = prediction_data, type = "response")
+
+# Plot GAM predictions
+ggplot(house_sparrow_data_interval, aes(x = Hour, y = total_count)) +
+  geom_point(alpha = 0.5) +
+  geom_line(data = prediction_data, aes(x = Hour, y = Predicted_Count), color = "blue", size = 1.2) +
+  labs(title = "GAM: Predicted House Sparrow Count",
+       x = "Time of Day (Hours)",
+       y = "Predicted Count") +
+  theme_minimal()
+
+# Fit a GAM model with a smooth function of Hour
+gam_model <- gam(total_count ~ s(Hour, bs = "cs"), family = poisson, data = house_sparrow_data_interval)
+
+# Summary of the GAM model
+summary(gam_model)
+
+# Create prediction data
+prediction_data <- data.frame(Hour = seq(min(house_sparrow_data_interval$Hour), 
+                                         max(house_sparrow_data_interval$Hour), 
+                                         length.out = 100))
+prediction_data$Predicted_Count <- predict(gam_model, newdata = prediction_data, type = "response")
+
+# Plot GAM predictions
+ggplot(house_sparrow_data_interval, aes(x = Hour, y = total_count)) +
+  geom_point(alpha = 0.5) +
+  geom_line(data = prediction_data, aes(x = Hour, y = Predicted_Count), color = "blue", size = 1.2) +
+  labs(title = "GAM: Predicted House Sparrow Count",
+       x = "Time of Day (Hours)",
+       y = "Predicted Count") +
+  theme_minimal()
+
+# Testing a Negative Binomial Model
+overdispersion_ratio <- summary(poisson_model)$deviance / summary(poisson_model)$df.residual
+
+print(overdispersion_ratio)
+
+# Load necessary libraries
+library(MASS) 
+
+# Fit a Negative Binomial GAM
+nb_gam_model <- gam(total_count ~ s(Hour, bs = "cs"), family = nb(), data = house_sparrow_data_interval)
+
+# Summary of the model
+summary(nb_gam_model)
+
+# Create prediction data
+prediction_data <- data.frame(Hour = seq(min(house_sparrow_data_interval$Hour), max(house_sparrow_data_interval$Hour), length.out = 100))
+prediction_data$Predicted_Count <- predict(nb_gam_model, newdata = prediction_data, type = "response")
+
+# Plot Negative Binomial GAM predictions
+ggplot(house_sparrow_data_interval, aes(x = Hour, y = total_count)) +
+  geom_point(alpha = 0.5) +
+  geom_line(data = prediction_data, aes(x = Hour, y = Predicted_Count), color = "blue", size = 1.2) +
+  labs(title = "Negative Binomial GAM: Predicted House Sparrow Count",
+       x = "Time of Day (Hours)",
+       y = "Predicted Count") +
+  theme_minimal()
 
